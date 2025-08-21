@@ -20,46 +20,47 @@ app.get("/api/listings/Property", async (req, res) => {
   }
 });
 
-// Example: Proxy route for Spark API
+
 app.get("/api/properties/filter", async (req, res) => {
   try {
     const { city, min, max, bedrooms, bathrooms, property, listingType } = req.query;
 
     let baseUrl = `https://replication.sparkapi.com/Version/3/Reso/OData/Property?$orderby=ModificationTimestamp%20desc&$top=100&$expand=Media`;
 
-    // collect OData filters
+    // Collect OData filters
     let filters = [];
 
     if (city) {
-      filters.push(`City eq '${city}'`);
+      filters.push(`City eq '${encodeURIComponent(city)}'`);
     }
 
+    // Handle PropertyType and ListingType logic
     if (property) {
-      filters.push(`PropertyType eq '${property}'`);
+      filters.push(`PropertyType eq '${encodeURIComponent(property)}'`);
     } else if (listingType) {
+      let typeFilters = [];
       if (listingType === "Buy") {
-        const buyTypes = [
+        typeFilters = [
           "Residential",
           "Residential Income",
           "Land",
           "Commercial Sale",
           "Farm",
           "Multi-Family",
-        ];
-        filters.push(
-          buyTypes.map(type => `PropertyType eq '${type}'`).join(" or ")
-        );
+        ].map(type => `PropertyType eq '${type}'`);
       } else if (listingType === "Rent") {
-        const rentTypes = [
+        typeFilters = [
           "Residential Lease",
           "Commercial Lease",
-        ];
-        filters.push(
-          rentTypes.map(type => `PropertyType eq '${type}'`).join(" or ")
-        );
+        ].map(type => `PropertyType eq '${type}'`);
+      }
+      // Group the OR conditions with parentheses
+      if (typeFilters.length > 0) {
+        filters.push(`(${typeFilters.join(' or ')})`);
       }
     }
 
+    // Price filters
     if (min && max) {
       filters.push(`ListPrice ge ${min} and ListPrice le ${max}`);
     } else if (min) {
@@ -68,21 +69,25 @@ app.get("/api/properties/filter", async (req, res) => {
       filters.push(`ListPrice le ${max}`);
     }
 
+    // Bedrooms filter
     if (bedrooms) {
-      filters.push(`BedroomsTotal eq ${bedrooms}`);
+      filters.push(`BedroomsTotal ge ${bedrooms}`);
     }
 
+    // Bathrooms filter
     if (bathrooms) {
-      filters.push(`BathroomsTotalInteger eq ${bathrooms}`);
+      filters.push(`BathroomsTotalInteger ge ${bathrooms}`);
     }
 
-    // add filters to URL (encoded!)
+    // Add filters to URL
     let url = baseUrl;
     if (filters.length > 0) {
-      url += `&$filter=${encodeURIComponent(filters.join(" and "))}`;
+      // Join all filters with 'and' and encode the entire filter string
+      const filterString = filters.join(' and ');
+      url += `&$filter=${encodeURIComponent(filterString)}`;
     }
 
-    console.log("✅ Spark API URL:", url);
+    // console.log("✅ Spark API URL:", url);
 
     const response = await fetch(url, {
       headers: {
@@ -91,12 +96,16 @@ app.get("/api/properties/filter", async (req, res) => {
       },
     });
 
+    if (!response.ok) {
+      throw new Error(`Spark API error: ${response.status} ${response.statusText}`);
+    }
+
     const data = await response.json();
     res.json(data);
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch from Spark API" });
+    console.error("❌ Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch from Spark API", details: err.message });
   }
 });
 
