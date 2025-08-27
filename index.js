@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 app.get("/api/listings/Property", async (req, res) => {
   try {
-    const response = await fetch("https://replication.sparkapi.com/Version/3/Reso/OData/Property?$orderby=ModificationTimestamp desc&$top=100&$expand=Media", {
+    const response = await fetch("https://replication.sparkapi.com/Version/3/Reso/OData/Property?$orderby=ModificationTimestamp desc&$top=18&$expand=Media", {
       headers: {
         Authorization: `Bearer ${process.env.SPARK_API_KEY}`,
       },
